@@ -62,9 +62,13 @@ describe('Astra smoke todo app', () => {
 
     await addTodo('Smoke check')
 
-    const checkbox = screen.getByLabelText(/mark smoke check as complete/i)
+    const completeLabel = /mark smoke check as complete/i
+    const incompleteLabel = /mark smoke check as incomplete/i
+    const checkbox = screen.getByLabelText(completeLabel)
 
     await userEvent.click(checkbox)
+    expect(checkbox).toBeChecked()
+    expect(screen.getByRole('checkbox', { name: incompleteLabel })).toBeInTheDocument()
     expect(screen.getByText('Smoke check')).toHaveClass('todo-text completed')
     expect(JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]')[0]).toMatchObject({
       text: 'Smoke check',
@@ -72,6 +76,7 @@ describe('Astra smoke todo app', () => {
     })
 
     await userEvent.click(checkbox)
+    expect(screen.getByRole('checkbox', { name: completeLabel })).toBeInTheDocument()
     expect(screen.getByText('Smoke check')).not.toHaveClass('todo-text completed')
     expect(JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]')[0]).toMatchObject({
       text: 'Smoke check',

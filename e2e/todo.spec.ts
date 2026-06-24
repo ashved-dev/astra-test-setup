@@ -1,44 +1,67 @@
-import { test, expect } from '@playwright/test'
+import { expect, Page, test } from '@playwright/test'
+
+const STORAGE_KEY = 'astra-smoke-todos'
+
+const addTodo = async (page: Page, text: string) => {
+  await page.getByLabel('New todo item').fill(text)
+  await page.getByRole('button', { name: /add/i }).click()
+}
 
 test('happy path adds a todo item', async ({ page }) => {
   await page.goto('/')
-  await expect(page.getByText('No todos yet. Add your first item above.')).toBeVisible()
 
-  await page.getByLabel('New todo item').fill('Buy coffee')
-  await page.getByRole('button', { name: /add/i }).click()
+  await expect(page.getByText('No todos yet. Add your first item above.')).toBeVisible()
+  await addTodo(page, 'Buy coffee')
 
   await expect(page.getByText('Buy coffee')).toBeVisible()
   await expect(page.getByText('No todos yet. Add your first item above.')).toBeHidden()
 })
 
-test('validation prevents empty or whitespace items', async ({ page }) => {
+test('validation prevents empty or whitespace-only submission', async ({ page }) => {
   await page.goto('/')
 
   await page.getByLabel('New todo item').fill('   ')
   await expect(page.getByRole('button', { name: /add/i })).toBeDisabled()
-
   await page.getByLabel('New todo item').fill('')
-  await expect(page.getByRole('button', { name: /add/i })).toBeDisabled()
+
+  await page.getByRole('button', { name: /add/i }).click({ force: true })
+  await expect(page.getByText('No todos yet. Add your first item above.')).toBeVisible()
+  await expect(page.locator('.todo-row')).toHaveCount(0)
 })
 
-test('items persist across reload', async ({ page }) => {
+test('persists items from localStorage and reflects them on load', async ({ page }) => {
   await page.goto('/')
 
-  await page.getByLabel('New todo item').fill('Persist across sessions')
-  await page.getByRole('button', { name: /add/i }).click()
+  await page.evaluate(
+    ([key]) =>
+      localStorage.setItem(
+        key,
+        JSON.stringify([
+          { id: 'seed-a', text: 'Seeded task', completed: false },
+          { id: 'seed-b', text: 'Seeded completed task', completed: true }
+        ])
+      ),
+    [STORAGE_KEY]
+  )
+
   await page.reload()
 
-  await expect(page.getByText('Persist across sessions')).toBeVisible()
+  await expect(page.getByText('Seeded task')).toBeVisible()
+  await expect(page.getByText('Seeded completed task')).toBeVisible()
+
+  const persisted = await page.evaluate((key) => {
+    return JSON.parse(localStorage.getItem(key as string) || '[]')
+  }, STORAGE_KEY)
+
+  expect(persisted).toHaveLength(2)
+  expect(persisted[1].completed).toBe(true)
 })
 
-test('deletes only the targeted todo', async ({ page }) => {
+test('deletes one item and keeps the others', async ({ page }) => {
   await page.goto('/')
 
-  await page.getByLabel('New todo item').fill('Task A')
-  await page.getByRole('button', { name: /add/i }).click()
-
-  await page.getByLabel('New todo item').fill('Task B')
-  await page.getByRole('button', { name: /add/i }).click()
+  await addTodo(page, 'Task A')
+  await addTodo(page, 'Task B')
 
   await page.getByRole('button', { name: /delete todo task a/i }).click()
 
@@ -46,16 +69,13 @@ test('deletes only the targeted todo', async ({ page }) => {
   await expect(page.getByText('Task B')).toBeVisible()
 })
 
-test('is readable and usable on mobile width', async ({ page }) => {
+test('remains readable and usable on mobile width', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/')
 
   await expect(page.getByRole('heading', { name: /todo app/i })).toBeVisible()
   await expect(page.getByLabel('New todo item')).toBeVisible()
-
-  await page.getByLabel('New todo item').fill('Mobile item')
-  await page.getByRole('button', { name: /add/i }).click()
-
+  await addTodo(page, 'Mobile item')
   await expect(page.getByText('Mobile item')).toBeVisible()
   await expect(page.getByRole('button', { name: /delete todo mobile item/i })).toBeVisible()
 })

@@ -1,0 +1,10 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  font-family: 'Avenir Next', 'Trebuchet MS', Arial, sans-serif;
+  color: #1e2330;
+}
